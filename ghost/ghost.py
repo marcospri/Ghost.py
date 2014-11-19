@@ -63,6 +63,8 @@ QNetworkCookieJar = QtNetwork.QNetworkCookieJar
 QNetworkDiskCache = QtNetwork.QNetworkDiskCache
 QNetworkProxy = QtNetwork.QNetworkProxy
 QNetworkCookie = QtNetwork.QNetworkCookie
+QSslConfiguration = QtNetwork.QSslConfiguration
+QSsl = QtNetwork.QSsl
 
 QtWebKit = _import('QtWebKit')
 
@@ -298,6 +300,7 @@ class Ghost(object):
                 for p in plugin_path:
                     Ghost._app.addLibraryPath(p)
 
+       
         self.popup_messages = []
         self.page = GhostWebPage(Ghost._app, self)
         QtWebKit.QWebSettings.setMaximumPagesInCache(0)
@@ -639,7 +642,7 @@ class Ghost(object):
             raise ValueError('unsupported cookie_storage type.')
 
     def open(self, address, method='get', headers={}, auth=None, body=None,
-             default_popup_response=None, wait=True, timeout=None):
+             default_popup_response=None, wait=True, timeout=None, client_certificate=None):
         """Opens a web page.
 
         :param address: The resource URL.
@@ -656,6 +659,8 @@ class Ghost(object):
         it is the caller's responsibilty to wait for the load to
         finish by other means (e.g. by calling wait_for_page_loaded()).
         :param timeout: An optional timeout.
+        :param client_certificate An optional dict with "certificate_path" and
+        "key_path" both paths corresponding to the certificate and key files 
         :return: Page resource, and all loaded resources, unless wait
         is False, in which case it returns None.
         """
@@ -665,6 +670,29 @@ class Ghost(object):
                              "%sOperation" % method.capitalize())
         except AttributeError:
             raise Error("Invalid http method %s" % method)
+
+        if client_certificate:
+            ssl_conf = QSslConfiguration.defaultConfiguration()
+
+            if "certificate_path" in client_certificate:
+                try:
+                    certificate = QtNetwork.QSslCertificate.fromPath(
+                                        client_certificate["certificate_path"],
+                                        QSsl.Pem)[0]
+                except IndexError:
+                    raise Error("Can't find certicate in %s" %  \
+                                client_certificate["certificate_path"])
+
+                ssl_conf.setLocalCertificate(certificate)
+
+            if "key_path" in client_certificate:
+                private_path = QtNetwork.QSslKey(
+                                    open(client_certificate["key_path"]).read(), 
+                                    QSsl.Rsa) 
+                ssl_conf.setPrivateKey(private_key)
+
+            QSslConfiguration.setDefaultConfiguration(ssl_conf)
+
         request = QNetworkRequest(QUrl(address))
         request.CacheLoadControl(0)
         for header in headers:
